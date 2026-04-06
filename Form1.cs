@@ -4,9 +4,19 @@ using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using System.Globalization;
+using System.Collections.Generic;
 
 namespace CalculatorWinForms
 {
+    public class CustomButton
+    {
+        public Rectangle Bounds;
+        public string Text = "";
+        public int Type; // 0=Digit, 1=Action, 2=Operator, 3=Equals, 4=Close
+        public bool IsHovered;
+        public bool IsPressed;
+    }
+
     public class Form1 : Form
     {
         [DllImport("user32.dll")]
@@ -27,6 +37,8 @@ namespace CalculatorWinForms
         private string lastOperator = "";
         private bool repeatEquals = false;
 
+        private List<CustomButton> _buttons = new List<CustomButton>();
+
         public Form1()
         {
             this.Size = new Size(360, 560);
@@ -36,6 +48,8 @@ namespace CalculatorWinForms
             this.KeyPreview = true;
 
             this.MouseDown += Form1_MouseDown;
+            this.MouseMove += Form1_MouseMove;
+            this.MouseUp += Form1_MouseUp;
             InitializeUI();
         }
 
@@ -43,13 +57,57 @@ namespace CalculatorWinForms
         {
             if (e.Button == MouseButtons.Left)
             {
+                foreach (var btn in _buttons)
+                {
+                    if (btn.Bounds.Contains(e.Location))
+                    {
+                        btn.IsPressed = true;
+                        this.Invalidate(btn.Bounds);
+                        
+                        if (btn.Type == 4) this.Close();
+                        else ProcessInput(btn.Text);
+                        
+                        return;
+                    }
+                }
+
                 ReleaseCapture();
                 SendMessage(Handle, WM_NCLBUTTONDOWN, HT_CAPTION, 0);
             }
         }
 
+        private void Form1_MouseMove(object? sender, MouseEventArgs e)
+        {
+            bool redraw = false;
+            foreach (var btn in _buttons)
+            {
+                bool hover = btn.Bounds.Contains(e.Location);
+                if (btn.IsHovered != hover)
+                {
+                    btn.IsHovered = hover;
+                    redraw = true;
+                }
+            }
+            if (redraw) this.Invalidate();
+        }
+
+        private void Form1_MouseUp(object? sender, MouseEventArgs e)
+        {
+            bool redraw = false;
+            foreach (var btn in _buttons)
+            {
+                if (btn.IsPressed)
+                {
+                    btn.IsPressed = false;
+                    redraw = true;
+                }
+            }
+            if (redraw) this.Invalidate();
+        }
+
         protected override void OnPaintBackground(PaintEventArgs e)
         {
+            // Fully override to custom draw the background
             using (LinearGradientBrush brush = new LinearGradientBrush(this.ClientRectangle, 
                 ColorTranslator.FromHtml("#1a0533"), ColorTranslator.FromHtml("#0f1a4a"), 45F))
             {
@@ -102,16 +160,94 @@ namespace CalculatorWinForms
             }
         }
 
+        private GraphicsPath GetRoundedRect(Rectangle bounds, int radius)
+        {
+            int diameter = radius * 2;
+            Size size = new Size(diameter, diameter);
+            Rectangle arc = new Rectangle(bounds.Location, size);
+            GraphicsPath path = new GraphicsPath();
+            if (radius == 0) { path.AddRectangle(bounds); return path; }
+
+            path.AddArc(arc, 180, 90);
+            arc.X = bounds.Right - diameter;
+            path.AddArc(arc, 270, 90);
+            arc.Y = bounds.Bottom - diameter;
+            path.AddArc(arc, 0, 90);
+            arc.X = bounds.Left;
+            path.AddArc(arc, 90, 90);
+            path.CloseFigure();
+            return path;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+            Font btnFont = new Font("Segoe UI", 14f, FontStyle.Regular);
+            StringFormat sf = new StringFormat();
+            sf.Alignment = StringAlignment.Center;
+            sf.LineAlignment = StringAlignment.Center;
+
+            foreach (var btn in _buttons)
+            {
+                Color fillColor;
+                Color textColor = Color.White;
+
+                if (btn.Type == 3) // Equals
+                {
+                    fillColor = btn.IsPressed ? Color.FromArgb(220, 124, 58, 237) :
+                                btn.IsHovered ? Color.FromArgb(240, 124, 58, 237) :
+                                                Color.FromArgb(255, 124, 58, 237);
+                }
+                else if (btn.Type == 2) // Operator
+                {
+                    fillColor = btn.IsPressed ? Color.FromArgb(60, 255, 255, 255) :
+                                btn.IsHovered ? Color.FromArgb(80, 255, 255, 255) :
+                                                Color.FromArgb(45, 255, 255, 255);
+                    textColor = Color.FromArgb(255, 167, 139, 250);
+                }
+                else // Digit, Action, Close
+                {
+                    fillColor = btn.IsPressed ? Color.FromArgb(45, 255, 255, 255) :
+                                btn.IsHovered ? Color.FromArgb(60, 255, 255, 255) :
+                                                Color.FromArgb(30, 255, 255, 255);
+                    if (btn.Type == 1 || btn.Type == 4) textColor = Color.FromArgb(255, 148, 163, 184);
+                }
+
+                int radius = 12;
+                using (GraphicsPath path = GetRoundedRect(btn.Bounds, radius))
+                {
+                    using (SolidBrush brush = new SolidBrush(fillColor))
+                    {
+                        e.Graphics.FillPath(brush, path);
+                    }
+                    using (Pen pen = new Pen(Color.FromArgb(60, 255, 255, 255), 1))
+                    {
+                        e.Graphics.DrawPath(pen, path);
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(btn.Text))
+                {
+                    using (SolidBrush textBrush = new SolidBrush(textColor))
+                    {
+                        e.Graphics.DrawString(btn.Text, btnFont, textBrush, btn.Bounds, sf);
+                    }
+                }
+            }
+
+            btnFont.Dispose();
+            sf.Dispose();
+        }
+
         private void InitializeUI()
         {
-            GlassButton closeBtn = new GlassButton();
+            CustomButton closeBtn = new CustomButton();
             closeBtn.Text = "×";
-            closeBtn.Size = new Size(30, 30);
-            closeBtn.Location = new Point(this.Width - 45, 15);
-            closeBtn.Type = GlassButton.ButtonType.Action;
-            closeBtn.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
-            closeBtn.Click += (s, e) => this.Close();
-            this.Controls.Add(closeBtn);
+            closeBtn.Bounds = new Rectangle(this.Width - 45, 15, 30, 30);
+            closeBtn.Type = 4;
+            _buttons.Add(closeBtn);
 
             displayBox = new TextBox();
             displayBox.ReadOnly = true;
@@ -147,46 +283,17 @@ namespace CalculatorWinForms
                 for (int c = 0; c < 4; c++)
                 {
                     string text = buttons[r, c];
-                    GlassButton btn = new GlassButton();
+                    CustomButton btn = new CustomButton();
                     btn.Text = text;
-                    btn.Size = new Size(cellWidth - 8, cellHeight - 8);
-                    btn.Location = new Point(startX + c * cellWidth + 4, startY + r * cellHeight + 4);
+                    btn.Bounds = new Rectangle(startX + c * cellWidth + 4, startY + r * cellHeight + 4, cellWidth - 8, cellHeight - 8);
 
-                    if (int.TryParse(text, out _)) btn.Type = GlassButton.ButtonType.Digit;
-                    else if (text == "=") btn.Type = GlassButton.ButtonType.Equals;
-                    else if (text == "+" || text == "−" || text == "×" || text == "÷") btn.Type = GlassButton.ButtonType.Operator;
-                    else btn.Type = GlassButton.ButtonType.Action;
+                    if (int.TryParse(text, out _)) btn.Type = 0;
+                    else if (text == "=") btn.Type = 3;
+                    else if (text == "+" || text == "−" || text == "×" || text == "÷") btn.Type = 2;
+                    else btn.Type = 1;
 
-                    btn.Click += Button_Click;
-                    this.Controls.Add(btn);
+                    _buttons.Add(btn);
                 }
-            }
-        }
-
-        private GraphicsPath GetRoundedRect(Rectangle bounds, int radius)
-        {
-            int diameter = radius * 2;
-            Size size = new Size(diameter, diameter);
-            Rectangle arc = new Rectangle(bounds.Location, size);
-            GraphicsPath path = new GraphicsPath();
-            if (radius == 0) { path.AddRectangle(bounds); return path; }
-
-            path.AddArc(arc, 180, 90);
-            arc.X = bounds.Right - diameter;
-            path.AddArc(arc, 270, 90);
-            arc.Y = bounds.Bottom - diameter;
-            path.AddArc(arc, 0, 90);
-            arc.X = bounds.Left;
-            path.AddArc(arc, 90, 90);
-            path.CloseFigure();
-            return path;
-        }
-
-        private void Button_Click(object? sender, EventArgs e)
-        {
-            if (sender is GlassButton btn)
-            {
-                ProcessInput(btn.Text);
             }
         }
 
@@ -203,11 +310,29 @@ namespace CalculatorWinForms
                 {
                     displayBox.Text += input;
                 }
-                repeatEquals = false;
+                if (repeatEquals) 
+                {
+                    // If we just pressed equals and then start typing a number, it resets everything.
+                    previousValue = 0;
+                    currentOperator = "";
+                    lastOperator = "";
+                    lastOperand = 0;
+                    repeatEquals = false;
+                }
             }
             else if (input == ".")
             {
-                if (isNewEntry || displayBox.Text == "Cannot divide by 0")
+                if (repeatEquals)
+                {
+                    previousValue = 0;
+                    currentOperator = "";
+                    lastOperator = "";
+                    lastOperand = 0;
+                    repeatEquals = false;
+                    displayBox.Text = "0.";
+                    isNewEntry = false;
+                }
+                else if (isNewEntry || displayBox.Text == "Cannot divide by 0")
                 {
                     displayBox.Text = "0.";
                     isNewEntry = false;
@@ -216,11 +341,10 @@ namespace CalculatorWinForms
                 {
                     displayBox.Text += ".";
                 }
-                repeatEquals = false;
             }
             else if (input == "⌫")
             {
-                if (!isNewEntry && displayBox.Text != "Cannot divide by 0")
+                if (!isNewEntry && !repeatEquals && displayBox.Text != "Cannot divide by 0")
                 {
                     if (displayBox.Text.Length > 1 && !(displayBox.Text.Length == 2 && displayBox.Text.StartsWith("-")))
                         displayBox.Text = displayBox.Text.Substring(0, displayBox.Text.Length - 1);
@@ -233,17 +357,19 @@ namespace CalculatorWinForms
             }
             else if (input == "C")
             {
-                currentValue = 0;
-                previousValue = 0;
-                currentOperator = "";
-                displayBox.Text = "0";
-                isNewEntry = true;
-                repeatEquals = false;
+                ClearAll();
             }
             else if (input == "CE")
             {
-                displayBox.Text = "0";
-                isNewEntry = true;
+                if (repeatEquals) 
+                {
+                    ClearAll();
+                }
+                else 
+                {
+                    displayBox.Text = "0";
+                    isNewEntry = true;
+                }
             }
             else if (input == "+/−")
             {
@@ -259,7 +385,7 @@ namespace CalculatorWinForms
             {
                 if (displayBox.Text == "Cannot divide by 0") return;
 
-                if (!isNewEntry && currentOperator != "")
+                if (!isNewEntry && currentOperator != "" && !repeatEquals)
                 {
                     Calculate();
                 }
@@ -267,7 +393,7 @@ namespace CalculatorWinForms
                 {
                     double.TryParse(displayBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out previousValue);
                 }
-                
+
                 currentOperator = input;
                 isNewEntry = true;
                 repeatEquals = false;
@@ -276,81 +402,76 @@ namespace CalculatorWinForms
             {
                 if (displayBox.Text == "Cannot divide by 0") return;
 
-                if (repeatEquals)
+                if (!repeatEquals)
                 {
-                    previousValue = double.Parse(displayBox.Text, CultureInfo.InvariantCulture);
+                    if (string.IsNullOrEmpty(currentOperator)) return; // nothing to do
+                    
+                    double.TryParse(displayBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out lastOperand);
+                    lastOperator = currentOperator;
+                    
+                    Calculate();
+                    repeatEquals = true;
                 }
                 else
                 {
-                    if (!double.TryParse(displayBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out lastOperand))
-                        lastOperand = 0;
-                    lastOperator = currentOperator;
+                    // Repeat equals
+                    double currentDisplay;
+                    double.TryParse(displayBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out currentDisplay);
+                    double result = DoMath(currentDisplay, lastOperand, lastOperator);
+                    if (displayBox.Text != "Cannot divide by 0") 
+                    {
+                        displayBox.Text = result.ToString("G15", CultureInfo.InvariantCulture);
+                        previousValue = result;
+                        isNewEntry = true;
+                    }
                 }
-
-                CalculateRepeat();
             }
+        }
+
+        private void ClearAll()
+        {
+            previousValue = 0;
+            currentValue = 0;
+            currentOperator = "";
+            lastOperand = 0;
+            lastOperator = "";
+            displayBox.Text = "0";
+            isNewEntry = true;
+            repeatEquals = false;
         }
 
         private void Calculate()
         {
             double.TryParse(displayBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out currentValue);
-            double result = 0;
-
-            switch (currentOperator)
+            
+            double result = DoMath(previousValue, currentValue, currentOperator);
+            
+            if (displayBox.Text != "Cannot divide by 0")
             {
-                case "+": result = previousValue + currentValue; break;
-                case "−": result = previousValue - currentValue; break;
-                case "×": result = previousValue * currentValue; break;
-                case "÷":
-                    if (currentValue == 0)
-                    {
-                        displayBox.Text = "Cannot divide by 0";
-                        isNewEntry = true;
-                        currentOperator = "";
-                        return;
-                    }
-                    result = previousValue / currentValue; 
-                    break;
-                default: 
-                    result = currentValue; 
-                    break;
+                displayBox.Text = result.ToString("G15", CultureInfo.InvariantCulture);
+                previousValue = result;
+                isNewEntry = true;
             }
-
-            displayBox.Text = result.ToString("G15", CultureInfo.InvariantCulture);
-            previousValue = result;
-            isNewEntry = true;
         }
 
-        private void CalculateRepeat()
+        private double DoMath(double a, double b, string op)
         {
-            if (string.IsNullOrEmpty(lastOperator)) return;
-
-            double currentDisplay;
-            double.TryParse(displayBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out currentDisplay);
-            double result = currentDisplay;
-
-            switch (lastOperator)
+            switch (op)
             {
-                case "+": result = currentDisplay + lastOperand; break;
-                case "−": result = currentDisplay - lastOperand; break;
-                case "×": result = currentDisplay * lastOperand; break;
+                case "+": return a + b;
+                case "−": return a - b;
+                case "×": return a * b;
                 case "÷":
-                    if (lastOperand == 0)
+                    if (b == 0)
                     {
                         displayBox.Text = "Cannot divide by 0";
-                        isNewEntry = true;
-                        return;
+                        return 0;
                     }
-                    result = currentDisplay / lastOperand; 
-                    break;
+                    return a / b;
             }
-
-            displayBox.Text = result.ToString("G15", CultureInfo.InvariantCulture);
-            previousValue = result;
-            isNewEntry = true;
-            repeatEquals = true;
+            return a;
         }
-        
+
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
             switch (keyData)
@@ -365,13 +486,13 @@ namespace CalculatorWinForms
                 case Keys.Decimal: ProcessInput("."); return true;
                 case Keys.OemPeriod: ProcessInput("."); return true;
                 case Keys.OemMinus: ProcessInput("−"); return true;
-                case Keys.Oemplus: ProcessInput("="); return true; 
+                case Keys.Oemplus: ProcessInput("="); return true;
                 case Keys.Shift | Keys.Oemplus: ProcessInput("+"); return true;
                 case Keys.Shift | Keys.D8: ProcessInput("×"); return true;
                 case Keys.Shift | Keys.OemMinus: ProcessInput("−"); return true;
             }
-            
-            if (keyData >= Keys.D0 && keyData <= Keys.D9) 
+
+            if (keyData >= Keys.D0 && keyData <= Keys.D9)
             {
                 int val = keyData - Keys.D0;
                 ProcessInput(val.ToString());
