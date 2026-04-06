@@ -95,6 +95,24 @@ namespace CalculatorWinForms
             }
         }
 
+        private class TransparentPanel : Panel
+        {
+            public TransparentPanel()
+            {
+                this.SetStyle(ControlStyles.SupportsTransparentBackColor, true);
+                this.BackColor = Color.Transparent;
+            }
+        }
+
+        private class TransparentTableLayoutPanel : TableLayoutPanel
+        {
+            public TransparentTableLayoutPanel()
+            {
+                this.SetStyle(ControlStyles.SupportsTransparentBackColor, true);
+                this.BackColor = Color.Transparent;
+            }
+        }
+
         private void InitializeUI()
         {
             GlassButton closeBtn = new GlassButton();
@@ -106,10 +124,9 @@ namespace CalculatorWinForms
             closeBtn.Click += (s, e) => this.Close();
             this.Controls.Add(closeBtn);
 
-            displayPanel = new Panel();
+            displayPanel = new TransparentPanel();
             displayPanel.Location = new Point(30, 70);
             displayPanel.Size = new Size(this.Width - 60, 60);
-            displayPanel.BackColor = Color.Transparent;
             displayPanel.Paint += DisplayPanel_Paint;
             this.Controls.Add(displayPanel);
 
@@ -119,19 +136,18 @@ namespace CalculatorWinForms
             displayBox.TextAlign = HorizontalAlignment.Right;
             displayBox.Font = new Font("Segoe UI Light", 28f);
             displayBox.ForeColor = Color.White;
-            displayBox.BackColor = Color.FromArgb(20, 255, 255, 255);
+            displayBox.BackColor = Color.FromArgb(255, 32, 23, 62);
             displayBox.BorderStyle = BorderStyle.None;
             // Center textbox vertically
             displayBox.Location = new Point(10, 5);
             displayBox.Width = displayPanel.Width - 20;
             displayPanel.Controls.Add(displayBox);
 
-            TableLayoutPanel grid = new TableLayoutPanel();
+            TableLayoutPanel grid = new TransparentTableLayoutPanel();
             grid.Location = new Point(30, 150);
             grid.Size = new Size(this.Width - 60, 370);
             grid.ColumnCount = 4;
             grid.RowCount = 5;
-            grid.BackColor = Color.Transparent;
             
             for (int i = 0; i < 4; i++) grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
             for (int i = 0; i < 5; i++) grid.RowStyles.Add(new RowStyle(SizeType.Percent, 20F));
