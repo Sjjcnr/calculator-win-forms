@@ -108,7 +108,15 @@ namespace CalculatorWinForms
                 }
             }
 
-            TextRenderer.DrawText(pevent.Graphics, this.Text, this.Font, this.ClientRectangle, this.ForeColor, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            using (StringFormat sf = new StringFormat())
+            {
+                sf.Alignment = StringAlignment.Center;
+                sf.LineAlignment = StringAlignment.Center;
+                using (SolidBrush textBrush = new SolidBrush(this.ForeColor))
+                {
+                    pevent.Graphics.DrawString(this.Text, this.Font, textBrush, this.ClientRectangle, sf);
+                }
+            }
         }
 
         private GraphicsPath GetRoundedRect(Rectangle bounds, int radius)

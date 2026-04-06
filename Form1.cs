@@ -18,8 +18,6 @@ namespace CalculatorWinForms
         public const int HT_CAPTION = 0x2;
 
         private TextBox displayBox = null!;
-        private Panel displayPanel = null!;
-        
         private double currentValue = 0;
         private double previousValue = 0;
         private string currentOperator = "";
@@ -72,13 +70,8 @@ namespace CalculatorWinForms
                 e.Graphics.FillEllipse(blueOrb, 200, 100, 180, 180);
                 e.Graphics.FillEllipse(blueOrb, -20, 350, 120, 120);
             }
-        }
 
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            base.OnPaint(e);
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-
+            // Draw glass rounded rect for calculator body
             Rectangle rect = new Rectangle(15, 15, this.Width - 30, this.Height - 30);
             int radius = 20;
 
@@ -93,23 +86,19 @@ namespace CalculatorWinForms
                     e.Graphics.DrawPath(pen, path);
                 }
             }
-        }
 
-        private class TransparentPanel : Panel
-        {
-            public TransparentPanel()
+            // Draw glass rounded rect for display area
+            Rectangle displayRect = new Rectangle(30, 70, this.Width - 60, 60);
+            using (GraphicsPath path = GetRoundedRect(displayRect, 10))
             {
-                this.SetStyle(ControlStyles.SupportsTransparentBackColor, true);
-                this.BackColor = Color.Transparent;
-            }
-        }
-
-        private class TransparentTableLayoutPanel : TableLayoutPanel
-        {
-            public TransparentTableLayoutPanel()
-            {
-                this.SetStyle(ControlStyles.SupportsTransparentBackColor, true);
-                this.BackColor = Color.Transparent;
+                using (SolidBrush brush = new SolidBrush(Color.FromArgb(20, 255, 255, 255)))
+                {
+                    e.Graphics.FillPath(brush, path);
+                }
+                using (Pen pen = new Pen(Color.FromArgb(60, 255, 255, 255), 1))
+                {
+                    e.Graphics.DrawPath(pen, path);
+                }
             }
         }
 
@@ -124,12 +113,6 @@ namespace CalculatorWinForms
             closeBtn.Click += (s, e) => this.Close();
             this.Controls.Add(closeBtn);
 
-            displayPanel = new TransparentPanel();
-            displayPanel.Location = new Point(30, 70);
-            displayPanel.Size = new Size(this.Width - 60, 60);
-            displayPanel.Paint += DisplayPanel_Paint;
-            this.Controls.Add(displayPanel);
-
             displayBox = new TextBox();
             displayBox.ReadOnly = true;
             displayBox.Text = "0";
@@ -138,19 +121,10 @@ namespace CalculatorWinForms
             displayBox.ForeColor = Color.White;
             displayBox.BackColor = Color.FromArgb(255, 32, 23, 62);
             displayBox.BorderStyle = BorderStyle.None;
-            // Center textbox vertically
-            displayBox.Location = new Point(10, 5);
-            displayBox.Width = displayPanel.Width - 20;
-            displayPanel.Controls.Add(displayBox);
-
-            TableLayoutPanel grid = new TransparentTableLayoutPanel();
-            grid.Location = new Point(30, 150);
-            grid.Size = new Size(this.Width - 60, 370);
-            grid.ColumnCount = 4;
-            grid.RowCount = 5;
-            
-            for (int i = 0; i < 4; i++) grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
-            for (int i = 0; i < 5; i++) grid.RowStyles.Add(new RowStyle(SizeType.Percent, 20F));
+            // Center textbox vertically inside its drawing rect
+            displayBox.Location = new Point(40, 75);
+            displayBox.Width = this.Width - 80;
+            this.Controls.Add(displayBox);
 
             string[,] buttons = new string[,]
             {
@@ -161,6 +135,13 @@ namespace CalculatorWinForms
                 { "+/−", "0", ".", "=" }
             };
 
+            int startX = 30;
+            int startY = 150;
+            int tableWidth = this.Width - 60;
+            int tableHeight = 370;
+            int cellWidth = tableWidth / 4;
+            int cellHeight = tableHeight / 5;
+
             for (int r = 0; r < 5; r++)
             {
                 for (int c = 0; c < 4; c++)
@@ -168,8 +149,8 @@ namespace CalculatorWinForms
                     string text = buttons[r, c];
                     GlassButton btn = new GlassButton();
                     btn.Text = text;
-                    btn.Dock = DockStyle.Fill;
-                    btn.Margin = new Padding(4);
+                    btn.Size = new Size(cellWidth - 8, cellHeight - 8);
+                    btn.Location = new Point(startX + c * cellWidth + 4, startY + r * cellHeight + 4);
 
                     if (int.TryParse(text, out _)) btn.Type = GlassButton.ButtonType.Digit;
                     else if (text == "=") btn.Type = GlassButton.ButtonType.Equals;
@@ -177,26 +158,7 @@ namespace CalculatorWinForms
                     else btn.Type = GlassButton.ButtonType.Action;
 
                     btn.Click += Button_Click;
-                    grid.Controls.Add(btn, c, r);
-                }
-            }
-
-            this.Controls.Add(grid);
-        }
-
-        private void DisplayPanel_Paint(object? sender, PaintEventArgs e)
-        {
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            Rectangle rect = new Rectangle(0, 0, displayPanel.Width - 1, displayPanel.Height - 1);
-            using (GraphicsPath path = GetRoundedRect(rect, 10))
-            {
-                using (SolidBrush brush = new SolidBrush(Color.FromArgb(20, 255, 255, 255)))
-                {
-                    e.Graphics.FillPath(brush, path);
-                }
-                using (Pen pen = new Pen(Color.FromArgb(60, 255, 255, 255), 1))
-                {
-                    e.Graphics.DrawPath(pen, path);
+                    this.Controls.Add(btn);
                 }
             }
         }
