@@ -17,8 +17,8 @@ namespace CalculatorWinForms
         public const int WM_NCLBUTTONDOWN = 0xA1;
         public const int HT_CAPTION = 0x2;
 
-        private TextBox displayBox;
-        private Panel displayPanel;
+        private TextBox displayBox = null!;
+        private Panel displayPanel = null!;
         
         private double currentValue = 0;
         private double previousValue = 0;
